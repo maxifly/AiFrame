@@ -44,8 +44,8 @@ void build(sets::Builder& b) {
         {
             sets::Menu m(b, "API");
             sets::Group g(b);
-            b.Input(kk::kand_token, "Token");
-            b.Pass(kk::kand_secret, "Secret");
+            b.Input(kk::ya_folder_id, "Folder ID");
+            b.Pass(kk::ya_api_key, "Application key");
             b.Button(SH("api_save"), "Применить");
         }
     }
