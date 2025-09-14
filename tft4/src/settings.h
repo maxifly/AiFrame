@@ -44,8 +44,8 @@ void build(sets::Builder& b) {
         {
             sets::Menu m(b, "API");
             sets::Group g(b);
-            b.Input(kk::kand_token, "Token");
-            b.Pass(kk::kand_secret, "Secret");
+            b.Input(kk::ya_folder_id, "Folder ID");
+            b.Pass(kk::ya_api_id, "Application key");
             b.Button(SH("api_save"), "Применить");
         }
     }
@@ -64,7 +64,7 @@ void build(sets::Builder& b) {
                 ESP.reset();
                 break;
             case SH("api_save"):
-                gen.setKey(db[kk::kand_token], db[kk::kand_secret]);
+                gen.setKey(db[kk::ya_api_id], db[kk::ya_folder_id]);
                 db.update();
                 break;
             case kk::auto_gen:

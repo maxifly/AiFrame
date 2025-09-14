@@ -4,10 +4,11 @@
 #define FUSION_HOST "api-key.fusionbrain.ai"
 #define FUSION_PORT 443
 #define FUSION_PERIOD 6000
-#define FUSION_TRIES 5
+#define FUSION_TRIES 1
 #define FUS_LOG(x) Serial.println(x)
 // #define GHTTP_HEADERS_LOG Serial
 #include <GSON.h>
+#include <ArduinoJson.h>
 #include <GyverHTTP.h>
 #include "StreamB64.h"
 #include "tjpgd/tjpgd.h"
@@ -31,14 +32,28 @@ class Kandinsky {
         GetStyles,
     };
    public:
-    Kandinsky() {}
-    Kandinsky(const String& apikey, const String& secret_key) {
-        setKey(apikey, secret_key);
+
+
+    Kandinsky() {
+        // Определение статических фильтров
+         StaticJsonDocument<200>  successFilter;
+         successFilter["id"] = true;
+         successFilter["done"] = true;
+         successFilter["error"] = true;
+
+
+        StaticJsonDocument<100> errorFilter;
+        errorFilter["error"] = true;
     }
-    void setKey(const String& apikey, const String& secret_key) {
-        if (apikey.length() && secret_key.length()) {
-            _api_key = "Key " + apikey;
-            _secret_key = "Secret " + secret_key;
+
+    Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
+        setKey(api_id, folder_id);
+    }
+
+    void setKey(const String& api_id, const String& folder_id) {
+        if (api_id.length() && folder_id.length()) {
+            _api_id = api_id;
+            _folder_id = folder_id;
         }
     }
     void onRender(RenderCallback cb) {
@@ -58,40 +73,62 @@ class Kandinsky {
         }
     }
     bool begin() {
-        if (!_api_key.length()) return false;
-        return request(State::GetModels, FUSION_HOST, "/key/api/v1/pipelines");
+        if (!_api_id.length()) return false;
+        if (!_folder_id.length()) return false;
+        return false;
     }
+
     bool getStyles() {
-        if (!_api_key.length()) return false;
-        return request(State::GetStyles, "cdn.fusionbrain.ai", "/static/styles/web");
+        // if (!_api_key.length()) return false;
+        return false;
+        //return request(State::GetStyles, "cdn.fusionbrain.ai", "/static/styles/web");
     }
     bool generate(Text query, uint16_t width = 512, uint16_t height = 512, Text style = "DEFAULT", Text negative = "") {
         status = "wrong config";
-        if (!_api_key.length()) return false;
-        if (!style.length()) return false;
+        if (!_api_id.length()) return false;
+        if (!_folder_id.length()) return false;
         if (!query.length()) return false;
-        if (!_id.length()) return false;
-        gson::string json;
-        json.beginObj();
-        json.addString(F("type"), F("GENERATE"));
-        json.addString(F("style"), style);
-        json.addString(F("negativePromptDecoder"), negative);
-        json.addInt(F("width"), width);
-        json.addInt(F("height"), height);
-        json.addInt(F("numImages"), 1);
-        json.beginObj(F("generateParams"));
-        json.addString(F("query"), query);
-        json.endObj();
-        json.endObj(true);
+        //if (!_id.length()) return false;
+        
+
+        // Создание JSON-документа для тела запроса
+        DynamicJsonDocument jsonDoc(256);
+        jsonDoc["model_uri"] = "art://" + _folder_id + "/yandex-art/latest";
+        
+        // Создание массива messages
+        JsonArray messages = jsonDoc.createNestedArray("messages");
+        JsonObject message1 = messages.createNestedObject();
+        message1["text"] = query;
+        message1["weight"] = 1;
+        
+        // Создание объекта generation_options
+        JsonObject generationOptions = jsonDoc.createNestedObject("generation_options");
+        generationOptions["mime_type"] = "image/jpeg";
+        
+        JsonObject aspectRatio = generationOptions.createNestedObject("aspectRatio");
+        aspectRatio["widthRatio"] = 1;
+        aspectRatio["heightRatio"] = 1;
+        
+
+
+
         // FUS_LOG("JSON being sent:");
         // FUS_LOG(json);
-        ghttp::Client::FormData data;
-        data.add("pipeline_id", "", "", Value(_id));
-        data.add("params", "blob", "application/json", json);
+
+        String id;
+        bool done;
+        String errorMsg;
+
         uint8_t tries = FUSION_TRIES;
         while (tries--) {
-            if (request(State::Generate, FUSION_HOST, "/key/api/v1/pipeline/run", "POST", &data)) {
+            if (performGenerateHttpRequest("llm.api.cloud.yandex.net", "/foundationModels/v1/imageGenerationAsync", "POST", jsonDoc, id, done, errorMsg)) {
                 FUS_LOG("Gen request sent");
+                _tmr = millis();
+                _uuid = id;
+                if (!_uuid.length()) {
+                    status = "operation ID unknown";
+                    return false;
+                } 
                 status = "wait result";
                 return true;
             } else {
@@ -103,12 +140,13 @@ class Kandinsky {
         return false;
     }
     bool getImage() {
-        if (!_api_key.length()) return false;
-        if (!_uuid.length()) return false;
-        FUS_LOG("Check status...");
-        String url("/key/api/v1/pipeline/status/");
-        url += _uuid;
-        return request(State::Status, FUSION_HOST, url);
+        return false;
+        // if (!_api_id.length()) return false;
+        // if (!_uuid.length()) return false;
+        // FUS_LOG("Check status...");
+        // String url("/key/api/v1/pipeline/status/");
+        // url += _uuid;
+        // return request(State::Status, FUSION_HOST, url);
     }
     void tick() {
         if (_uuid.length() && millis() - _tmr >= FUSION_PERIOD) {
@@ -120,8 +158,8 @@ class Kandinsky {
     String styles = "";
     String status = "";
    private:
-    String _api_key;
-    String _secret_key;
+    String _folder_id;
+    String _api_id;
     String _uuid;
     uint8_t _scale = 0;
     uint32_t _tmr = 0;
@@ -131,6 +169,11 @@ class Kandinsky {
     StreamB64* _stream = nullptr;
     // static
     static Kandinsky* self;
+
+    // Фильтры для успешного ответа и ошибки
+    StaticJsonDocument<200> successFilter;
+    StaticJsonDocument<100> errorFilter;
+
     static size_t jd_input_cb(JDEC* jdec, uint8_t* buf, size_t len) {
         if (self) {
             self->_stream->readBytes(buf, len);
@@ -144,6 +187,131 @@ class Kandinsky {
         return 1;
     }
     // system
+    bool performGenerateHttpRequest(Text host, Text url, Text method, DynamicJsonDocument& jsonDoc, String& id, bool& done, String& errorMsg) {
+        // Сериализация JSON в строку
+        String jsonString;
+        serializeJson(jsonDoc, jsonString);
+        
+        // Установка заголовков
+        ghttp::Client::Headers headers;
+        // headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Api-Key " + _api_id);
+        // headers.add("Accept", "*/*");
+        
+        FUSION_CLIENT client;
+#ifdef ESP8266
+        client.setBufferSizes(512, 512);
+#endif
+        client.setInsecure();
+        ghttp::Client http(client, host.str(), FUSION_PORT);
+
+
+        // Отправка запроса с JSON в теле
+        bool ok = http.request(url, method, headers, su::Text(jsonString.c_str()));
+        // bool ok = http.request(url, method, headers);
+        
+        if (!ok) {
+            FUS_LOG("Request error");
+            http.flush();
+            return false;
+        }
+        
+        FUS_LOG("Host");
+        FUS_LOG(host);
+        FUS_LOG("Url");
+        FUS_LOG(url);
+        FUS_LOG("Body");
+        FUS_LOG(jsonString.c_str());        
+
+
+          FUS_LOG(headers);
+delay(5000);
+        // Получение ответа
+        ghttp::Client::Response resp = http.getResponse();
+        
+        if (resp) {
+            FUS_LOG("Response");      
+        } else {
+            FUS_LOG("Response not exists");   
+        }
+        
+        StreamReader responseBodyReader(resp.body());
+        
+
+
+        // std::string responseBody = "";
+        // char buffer[256];
+        // int bytesRead;
+        // while ((bytesRead = responseBodyReader.readBytes(buffer, sizeof(buffer)) > 0)) {
+        //   responseBody += std::string(buffer, bytesRead);
+        // }
+        // std::string logMessage = std::string("Response ") + responseBody;
+        // FUS_LOG(logMessage.c_str());
+
+        int httpStatus = resp.code();
+        
+        String statusMessage = String("Status ") + String(httpStatus);
+        FUS_LOG(statusMessage.c_str());        
+        
+        http.flush();
+
+        // Проверка HTTP статуса
+        if (httpStatus < 200 || httpStatus > 299) {
+            // Парсинг ответа с использованием статического фильтра для ошибки
+            // StaticJsonDocument<100> errorFilter;
+            // errorFilter["error"] = true;
+            
+            DynamicJsonDocument docError(100);
+            DeserializationError err = deserializeJson(docError, responseBodyReader, DeserializationOption::Filter(errorFilter));
+            
+            if (err) {
+                FUS_LOG("Failed to parse response JSON for error");
+                FUS_LOG(err.c_str());
+                return false;
+            }
+            
+            // Извлечение поля "error"
+            if (docError.containsKey("error")) {
+                errorMsg = docError["error"].as<String>();
+            } else {
+                errorMsg = "Unknown error";
+            }
+            return false;
+        }
+        
+        // Парсинг ответа с использованием статического фильтра для успешного ответа
+        // StaticJsonDocument<200> successFilter;
+        // successFilter["id"] = true;
+        // successFilter["done"] = true;
+        
+        DynamicJsonDocument docSuccess(200);
+        DeserializationError err = deserializeJson(docSuccess, responseBodyReader, DeserializationOption::Filter(successFilter));
+        
+        if (err) {
+            FUS_LOG("Failed to parse response JSON for success");
+            FUS_LOG(err.c_str());
+            return false;
+        }
+        
+        // Извлечение интересующих полей
+        if (docSuccess.containsKey("id")) {
+            id = docSuccess["id"].as<String>();
+        } else {
+            id = "";
+        }
+        
+        if (docSuccess.containsKey("done")) {
+            done = docSuccess["done"].as<bool>();
+        } else {
+            done = false;
+        }
+        FUS_LOG("Operation id " + id);
+        return true;
+    }
+
+
+
+
     bool request(State state, Text host, Text url, Text method = "GET", ghttp::Client::FormData* data = nullptr) {
         FUSION_CLIENT client;
 #ifdef ESP8266
@@ -152,8 +320,8 @@ class Kandinsky {
         client.setInsecure();
         ghttp::Client http(client, host.str(), FUSION_PORT);
         ghttp::Client::Headers headers;
-        headers.add("X-Key", _api_key);
-        headers.add("X-Secret", _secret_key);
+        // headers.add("X-Key", _api_key);
+        // headers.add("X-Secret", _secret_key);
         bool ok = data ? http.request(url, method, headers, *data)
                        : http.request(url, method, headers);
         if (!ok) {
@@ -267,6 +435,8 @@ class Kandinsky {
         return false;
     }
 };
+
+
 
 
 Kandinsky* Kandinsky::self __attribute__((weak)) = nullptr;

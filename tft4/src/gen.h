@@ -1,5 +1,5 @@
 #pragma once
-#include "Kandinsky/Kandinsky.h"
+#include "YandexArt/Kandinsky.h"
 
 #include "config.h"
 Kandinsky gen;
