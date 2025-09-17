@@ -21,7 +21,7 @@ void db_init() {
     db.init(kk::wifi_ssid, "");
     db.init(kk::wifi_pass, "");
     db.init(kk::ya_folder_id, "");
-    db.init(kk::ya_api_key, "");
+    db.init(kk::ya_api_id, "");
 
     db.init(kk::gen_query, "");
     db.init(kk::gen_negative, "");

@@ -34,10 +34,22 @@ class Kandinsky {
    public:
 
 
-    Kandinsky() {}
-    Kandinsky(const String& api_id, const String& folder_id) {
+    Kandinsky() {
+        // Определение статических фильтров
+         StaticJsonDocument<200>  successFilter;
+         successFilter["id"] = true;
+         successFilter["done"] = true;
+         successFilter["error"] = true;
+
+
+        StaticJsonDocument<100> errorFilter;
+        errorFilter["error"] = true;
+    }
+
+    Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
         setKey(api_id, folder_id);
     }
+
     void setKey(const String& api_id, const String& folder_id) {
         if (api_id.length() && folder_id.length()) {
             _api_id = api_id;
@@ -158,8 +170,8 @@ class Kandinsky {
     static Kandinsky* self;
 
     // Фильтры для успешного ответа и ошибки
-    static const StaticJsonDocument<200> successFilter;
-    static const StaticJsonDocument<100> errorFilter;
+    StaticJsonDocument<200> successFilter;
+    StaticJsonDocument<100> errorFilter;
 
     static size_t jd_input_cb(JDEC* jdec, uint8_t* buf, size_t len) {
         if (self) {
@@ -204,7 +216,8 @@ class Kandinsky {
         
         // Получение ответа
         ghttp::Client::Response resp = http.getResponse();
-        String responseBody = resp.body();
+        StreamReader responseBodyReader(resp.body());
+
         int httpStatus = resp.code();
         http.flush();
 
@@ -215,7 +228,7 @@ class Kandinsky {
             // errorFilter["error"] = true;
             
             DynamicJsonDocument docError(100);
-            DeserializationError err = deserializeJson(docError, responseBody, DeserializationOption::Filter(errorFilter));
+            DeserializationError err = deserializeJson(docError, responseBodyReader, DeserializationOption::Filter(errorFilter));
             
             if (err) {
                 FUS_LOG("Failed to parse response JSON for error");
@@ -237,7 +250,7 @@ class Kandinsky {
         // successFilter["done"] = true;
         
         DynamicJsonDocument docSuccess(200);
-        DeserializationError err = deserializeJson(docSuccess, responseBody, DeserializationOption::Filter(successFilter));
+        DeserializationError err = deserializeJson(docSuccess, responseBodyReader, DeserializationOption::Filter(successFilter));
         
         if (err) {
             FUS_LOG("Failed to parse response JSON for success");
@@ -271,8 +284,8 @@ class Kandinsky {
         client.setInsecure();
         ghttp::Client http(client, host.str(), FUSION_PORT);
         ghttp::Client::Headers headers;
-        headers.add("X-Key", _api_key);
-        headers.add("X-Secret", _secret_key);
+        // headers.add("X-Key", _api_key);
+        // headers.add("X-Secret", _secret_key);
         bool ok = data ? http.request(url, method, headers, *data)
                        : http.request(url, method, headers);
         if (!ok) {
@@ -387,20 +400,7 @@ class Kandinsky {
     }
 };
 
-// Определение статических фильтров
-const StaticJsonDocument<200> HttpRequestManager::successFilter = []() {
-    StaticJsonDocument<200> f;
-    f["id"] = true;
-    f["done"] = true;
-    f["error"] = true;
-    return f;
-}();
 
-const StaticJsonDocument<100> HttpRequestManager::errorFilter = []() {
-    StaticJsonDocument<100> f;
-    f["error"] = true;
-    return f;
-}();
 
 
 Kandinsky* Kandinsky::self __attribute__((weak)) = nullptr;

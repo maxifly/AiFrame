@@ -19,7 +19,7 @@ void setup() {
     tft.println();
 
     // ======= AI =======
-    gen.setKey(db[kk::kand_token], db[kk::kand_secret]);
+    gen.setKey(db[kk::ya_api_id], db[kk::ya_folder_id]);
 
     // ======= AP =======
     WiFi.mode(WIFI_AP_STA);
