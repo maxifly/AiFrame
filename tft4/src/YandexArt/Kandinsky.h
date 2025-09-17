@@ -4,7 +4,7 @@
 #define FUSION_HOST "api-key.fusionbrain.ai"
 #define FUSION_PORT 443
 #define FUSION_PERIOD 6000
-#define FUSION_TRIES 2
+#define FUSION_TRIES 1
 #define FUS_LOG(x) Serial.println(x)
 // #define GHTTP_HEADERS_LOG Serial
 #include <GSON.h>
@@ -194,9 +194,9 @@ class Kandinsky {
         
         // Установка заголовков
         ghttp::Client::Headers headers;
-        headers.add("Content-Type", "application/json");
+        // headers.add("Content-Type", "application/json");
         headers.add("Authorization", "Api-Key " + _api_id);
-        headers.add("Accept", "*/*");
+        // headers.add("Accept", "*/*");
         
         FUSION_CLIENT client;
 #ifdef ESP8266
@@ -208,6 +208,7 @@ class Kandinsky {
 
         // Отправка запроса с JSON в теле
         bool ok = http.request(url, method, headers, su::Text(jsonString.c_str()));
+        // bool ok = http.request(url, method, headers);
         
         if (!ok) {
             FUS_LOG("Request error");
@@ -224,10 +225,19 @@ class Kandinsky {
 
 
           FUS_LOG(headers);
-
+delay(5000);
         // Получение ответа
         ghttp::Client::Response resp = http.getResponse();
+        
+        if (resp) {
+            FUS_LOG("Response");      
+        } else {
+            FUS_LOG("Response not exists");   
+        }
+        
         StreamReader responseBodyReader(resp.body());
+        
+
 
         // std::string responseBody = "";
         // char buffer[256];
@@ -256,6 +266,7 @@ class Kandinsky {
             
             if (err) {
                 FUS_LOG("Failed to parse response JSON for error");
+                FUS_LOG(err.c_str());
                 return false;
             }
             
@@ -278,6 +289,7 @@ class Kandinsky {
         
         if (err) {
             FUS_LOG("Failed to parse response JSON for success");
+            FUS_LOG(err.c_str());
             return false;
         }
         
