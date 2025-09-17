@@ -4,7 +4,7 @@
 #define FUSION_HOST "api-key.fusionbrain.ai"
 #define FUSION_PORT 443
 #define FUSION_PERIOD 6000
-#define FUSION_TRIES 5
+#define FUSION_TRIES 2
 #define FUS_LOG(x) Serial.println(x)
 // #define GHTTP_HEADERS_LOG Serial
 #include <GSON.h>
@@ -73,11 +73,11 @@ class Kandinsky {
         }
     }
     bool begin() {
-        //if (!_api_key.length()) return false;
-        //return request(State::GetModels, FUSION_HOST, "/key/api/v1/pipelines");
+        if (!_api_id.length()) return false;
+        if (!_folder_id.length()) return false;
         return false;
-
     }
+
     bool getStyles() {
         // if (!_api_key.length()) return false;
         return false;
@@ -121,7 +121,7 @@ class Kandinsky {
 
         uint8_t tries = FUSION_TRIES;
         while (tries--) {
-            if (performGenerateHttpRequest("llm.api.cloud.yandex.net", "foundationModels/v1/imageGenerationAsync", "POST", jsonDoc, id, done, errorMsg)) {
+            if (performGenerateHttpRequest("llm.api.cloud.yandex.net", "/foundationModels/v1/imageGenerationAsync", "POST", jsonDoc, id, done, errorMsg)) {
                 FUS_LOG("Gen request sent");
                 _tmr = millis();
                 _uuid = id;
@@ -140,12 +140,13 @@ class Kandinsky {
         return false;
     }
     bool getImage() {
-        if (!_api_id.length()) return false;
-        if (!_uuid.length()) return false;
-        FUS_LOG("Check status...");
-        String url("/key/api/v1/pipeline/status/");
-        url += _uuid;
-        return request(State::Status, FUSION_HOST, url);
+        return false;
+        // if (!_api_id.length()) return false;
+        // if (!_uuid.length()) return false;
+        // FUS_LOG("Check status...");
+        // String url("/key/api/v1/pipeline/status/");
+        // url += _uuid;
+        // return request(State::Status, FUSION_HOST, url);
     }
     void tick() {
         if (_uuid.length() && millis() - _tmr >= FUSION_PERIOD) {
@@ -214,11 +215,34 @@ class Kandinsky {
             return false;
         }
         
+        FUS_LOG("Host");
+        FUS_LOG(host);
+        FUS_LOG("Url");
+        FUS_LOG(url);
+        FUS_LOG("Body");
+        FUS_LOG(jsonString.c_str());        
+
+
+          FUS_LOG(headers);
+
         // Получение ответа
         ghttp::Client::Response resp = http.getResponse();
         StreamReader responseBodyReader(resp.body());
 
+        // std::string responseBody = "";
+        // char buffer[256];
+        // int bytesRead;
+        // while ((bytesRead = responseBodyReader.readBytes(buffer, sizeof(buffer)) > 0)) {
+        //   responseBody += std::string(buffer, bytesRead);
+        // }
+        // std::string logMessage = std::string("Response ") + responseBody;
+        // FUS_LOG(logMessage.c_str());
+
         int httpStatus = resp.code();
+        
+        String statusMessage = String("Status ") + String(httpStatus);
+        FUS_LOG(statusMessage.c_str());        
+        
         http.flush();
 
         // Проверка HTTP статуса
