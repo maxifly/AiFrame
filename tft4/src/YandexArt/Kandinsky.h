@@ -192,9 +192,9 @@ class Kandinsky {
         
         // Установка заголовков
         ghttp::Client::Headers headers;
-        // headers.add("Content-Type", "application/json");
+        headers.add("Content-Type", "application/json");
         headers.add("Authorization", "Api-Key " + _api_id);
-        // headers.add("Accept", "*/*");
+        headers.add("Accept", "*/*");
         
         FUSION_CLIENT client;
 #ifdef ESP8266
@@ -205,12 +205,9 @@ class Kandinsky {
 
 
         // Отправка запроса с JSON в теле
-        String body = "{\"model_uri\":\"art://b1g/yandex-art/latest\"}";
-
-        // bool ok = http.request(url, method, headers, su::Text(jsonString.c_str()));
+        // String body = "{\"model_uri\":\"art://b1g/yandex-art/latest\"}";
 
         bool ok = http.request(url, method, headers, jsonString);
-        // bool ok = http.request(url, method, headers);
         
         if (!ok) {
             FUS_LOG("Request error");
@@ -218,16 +215,11 @@ class Kandinsky {
             return false;
         }
         
-        FUS_LOG("Host");
-        FUS_LOG(host);
-        FUS_LOG("Url");
-        FUS_LOG(url);
-        FUS_LOG("Body");
-        FUS_LOG(jsonString.c_str());
-        FUS_LOG(body.c_str());         
-
-
-          FUS_LOG(headers);
+        FUS_LOG("Host " + host.toString());
+        FUS_LOG("Url " + url.toString());
+        FUS_LOG("Body " + jsonString);
+        FUS_LOG("Headers");
+        FUS_LOG(headers);
 
         // Получение ответа
         ghttp::Client::Response resp = http.getResponse();
@@ -241,50 +233,13 @@ class Kandinsky {
         }
         
         StreamReader responseBodyReader(resp.body());
-        
-
-        // std::string responseBody = "";
-        // char buffer[256];
-        // int bytesRead;
-        // while ((bytesRead = responseBodyReader.readBytes(buffer, sizeof(buffer)) > 0)) {
-        //   responseBody += std::string(buffer, bytesRead);
-        // }
-        // std::string logMessage = std::string("Response ") + responseBody;
-        // FUS_LOG(logMessage.c_str());
 
         int httpStatus = resp.code();
+        FUS_LOG("Status " + String(httpStatus));        
         
-        String statusMessage = String("Status ") + String(httpStatus);
-        FUS_LOG(statusMessage.c_str());        
-        
-        // http.flush();
-
         // Проверка HTTP статуса
         if (httpStatus < 200 || httpStatus > 299) {
             // Парсинг ответа с использованием статического фильтра для ошибки
-            // StaticJsonDocument<100> errorFilter;
-            // errorFilter["error"] = true;
-            
-
-// Serial.println("-1-");
-//            String s = resp.body().readString();
-//             gson::Parser json;
-//             if (json.parse(s)) {
-//                 json.stringify(Serial);
-//             } else {
-//                 Serial.println("Parse error");
-//             }
-// Serial.println("-2-");
-        // Чтение данных в строку
-        // String responseBody = responseBodyReader.readString();
-        // while (responseBodyReader.available()) {
-        //     char c = responseBodyReader.read();
-        //     responseBody += c;
-        // }
-
-        // // Вывод данных в лог (если необходимо)
-        // FUS_LOG(responseBody.c_str());
-
 
             DynamicJsonDocument docError(100);
             DeserializationError err = deserializeJson(docError, responseBodyReader, DeserializationOption::Filter(errorFilter));
