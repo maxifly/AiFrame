@@ -138,10 +138,10 @@ class Kandinsky {
         return false;
     }
     bool getImage() {
+        if (!_api_id.length()) return false;
+        if (!_uuid.length()) return false;
+        FUS_LOG("Check status...");
         return false;
-        // if (!_api_id.length()) return false;
-        // if (!_uuid.length()) return false;
-        // FUS_LOG("Check status...");
         // String url("/key/api/v1/pipeline/status/");
         // url += _uuid;
         // return request(State::Status, FUSION_HOST, url);
@@ -290,65 +290,94 @@ class Kandinsky {
     }
 
 
+    // -----------------------------
 
-
-    bool request(State state, Text host, Text url, Text method = "GET", ghttp::Client::FormData* data = nullptr) {
+    bool performGetImageRequest(Text host, Text url, Text method = "GET") {
         FUSION_CLIENT client;
 #ifdef ESP8266
         client.setBufferSizes(512, 512);
 #endif
         client.setInsecure();
         ghttp::Client http(client, host.str(), FUSION_PORT);
+        // Установка заголовков
         ghttp::Client::Headers headers;
-        // headers.add("X-Key", _api_key);
-        // headers.add("X-Secret", _secret_key);
-        bool ok = data ? http.request(url, method, headers, *data)
-                       : http.request(url, method, headers);
+        headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Api-Key " + _api_id);
+        headers.add("Accept", "*/*");
+
+        bool ok = http.request(url, method, headers);
+
         if (!ok) {
             FUS_LOG("Request error");
+            http.flush()
             return false;
         }
+
         ghttp::Client::Response resp = http.getResponse();
-        // FUS_LOG("Response code: " + String(resp.code()));
+        FUS_LOG("Response code: " + String(resp.code()));
+
         if (resp && resp.code() >= 200 && resp.code() < 300) {
-            if (state == State::Status) {
                 bool ok = parseStatus(resp.body());
                 http.flush();
                 return ok;
-            } else {
-                gtl::stack_uniq<uint8_t> str;
-                resp.body().writeTo(str);
-                gson::Parser json;
-                if (!json.parse(str.buf(), str.length())) {
-                    FUS_LOG("Parse error");
-                    return false;
-                }
-                return parse(state, json);
-            }
+            
         } else {
+            // TODO Добавить парсинг ошибки
             http.flush();
             FUS_LOG("Error" + String(resp.code()));
             FUS_LOG("Response error");
         }
         return false;
     }
+
+    String readValue(Stream& stream) {
+        String result = "";
+        int c;
+        
+        int nextChar = stream.peek();
+
+        while ((c = stream.read()) != -1) { // Читаем символы из потока
+            if (c == 'n' || c == 't' || c == 'f') {
+                // Это null или true или false
+                result = String((char)c) + stream.readStringUntil(',');
+                break;
+            } else if ( c == '"') {
+               result = stream.readStringUntil('"');
+               break
+            } else if ( c == ',' || c == '}') {
+                break;
+            }
+                // Это какое-то неожиданное число
+                // Просто пропустим
+            }
+        }
+
+        return result;
+    }
+
     bool parseStatus(Stream& stream) {
         bool found = false;
         bool insideResult = false;
         while (stream.available()) {
             stream.readStringUntil('"');
             String key = stream.readStringUntil('"');
-            if (key == "result") {
+            if (key == "response") {
                 insideResult = true;
                 continue;
             }
-            if (insideResult && key == "files") {
+            if (insideResult && key == "image") {
                 found = true;
                 break;
             }
-            stream.readStringUntil('"');
-            String val = stream.readStringUntil('"');
+
+            // Только что прочли ключ, значит едем до двоеточия
+            stream.readStringUntil(':');
+            // Теперь читаем значение
+            String val = readValue(stream);
+
             if (!key.length() || !val.length()) break;
+
+            // TODO 
             if (key == "status") {
                 switch (Text(val).hash()) {
                     case SH("INITIAL"):
@@ -364,6 +393,8 @@ class Kandinsky {
                 }
             }
         }
+
+
         if (found) {
             stream.readStringUntil('"');
             uint8_t* workspace = new uint8_t[TJPGD_WORKSPACE_SIZE];
@@ -391,7 +422,11 @@ class Kandinsky {
         }
         return true;
     }
+
+
+
     bool parse(State state, gson::Parser& json) {
+        // Удалить
         switch (state) {
             case State::GetStyles:
                 styles = "";
