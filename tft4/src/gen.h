@@ -18,8 +18,10 @@ void gen_tick() {
         gen.setScale(DISP_SCALE);
         gen.generate(
             db[kk::gen_query],
-            DISP_WIDTH * DISP_SCALE,
-            DISP_HEIGHT * DISP_SCALE,
+            // DISP_WIDTH * DISP_SCALE,
+            // DISP_HEIGHT * DISP_SCALE,
+            DISP_WIDTH,
+            DISP_HEIGHT,
             Text(gen.styles).getSub(db[kk::gen_style], ';'),
             db[kk::gen_negative]);
     }
