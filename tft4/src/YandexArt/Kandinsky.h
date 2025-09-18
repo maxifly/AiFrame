@@ -36,14 +36,11 @@ class Kandinsky {
 
     Kandinsky() {
         // Определение статических фильтров
-         StaticJsonDocument<200>  successFilter;
          successFilter["id"] = true;
          successFilter["done"] = true;
          successFilter["error"] = true;
 
-
-        StaticJsonDocument<100> errorFilter;
-        errorFilter["error"] = true;
+         errorFilter["error"] = true;
     }
 
     Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
@@ -94,8 +91,9 @@ class Kandinsky {
         // Создание JSON-документа для тела запроса
         DynamicJsonDocument jsonDoc(256);
         jsonDoc["model_uri"] = "art://" + _folder_id + "/yandex-art/latest";
+        // jsonDoc["model_uri"] = "art://b2g/yandex-art/latest";
         
-        // Создание массива messages
+        // // Создание массива messages
         JsonArray messages = jsonDoc.createNestedArray("messages");
         JsonObject message1 = messages.createNestedObject();
         message1["text"] = query;
@@ -207,7 +205,11 @@ class Kandinsky {
 
 
         // Отправка запроса с JSON в теле
-        bool ok = http.request(url, method, headers, su::Text(jsonString.c_str()));
+        String body = "{\"model_uri\":\"art://b1g/yandex-art/latest\"}";
+
+        // bool ok = http.request(url, method, headers, su::Text(jsonString.c_str()));
+
+        bool ok = http.request(url, method, headers, jsonString);
         // bool ok = http.request(url, method, headers);
         
         if (!ok) {
@@ -221,23 +223,25 @@ class Kandinsky {
         FUS_LOG("Url");
         FUS_LOG(url);
         FUS_LOG("Body");
-        FUS_LOG(jsonString.c_str());        
+        FUS_LOG(jsonString.c_str());
+        FUS_LOG(body.c_str());         
 
 
           FUS_LOG(headers);
-delay(5000);
+
         // Получение ответа
         ghttp::Client::Response resp = http.getResponse();
         
         if (resp) {
             FUS_LOG("Response");      
         } else {
-            FUS_LOG("Response not exists");   
+            FUS_LOG("Response not exists");
+            http.flush();
+            return false;               
         }
         
         StreamReader responseBodyReader(resp.body());
         
-
 
         // std::string responseBody = "";
         // char buffer[256];
@@ -253,7 +257,7 @@ delay(5000);
         String statusMessage = String("Status ") + String(httpStatus);
         FUS_LOG(statusMessage.c_str());        
         
-        http.flush();
+        // http.flush();
 
         // Проверка HTTP статуса
         if (httpStatus < 200 || httpStatus > 299) {
@@ -261,12 +265,34 @@ delay(5000);
             // StaticJsonDocument<100> errorFilter;
             // errorFilter["error"] = true;
             
+
+// Serial.println("-1-");
+//            String s = resp.body().readString();
+//             gson::Parser json;
+//             if (json.parse(s)) {
+//                 json.stringify(Serial);
+//             } else {
+//                 Serial.println("Parse error");
+//             }
+// Serial.println("-2-");
+        // Чтение данных в строку
+        // String responseBody = responseBodyReader.readString();
+        // while (responseBodyReader.available()) {
+        //     char c = responseBodyReader.read();
+        //     responseBody += c;
+        // }
+
+        // // Вывод данных в лог (если необходимо)
+        // FUS_LOG(responseBody.c_str());
+
+
             DynamicJsonDocument docError(100);
             DeserializationError err = deserializeJson(docError, responseBodyReader, DeserializationOption::Filter(errorFilter));
-            
+
             if (err) {
                 FUS_LOG("Failed to parse response JSON for error");
                 FUS_LOG(err.c_str());
+                http.flush();
                 return false;
             }
             
@@ -276,13 +302,10 @@ delay(5000);
             } else {
                 errorMsg = "Unknown error";
             }
+            FUS_LOG(errorMsg.c_str());
+            http.flush();
             return false;
         }
-        
-        // Парсинг ответа с использованием статического фильтра для успешного ответа
-        // StaticJsonDocument<200> successFilter;
-        // successFilter["id"] = true;
-        // successFilter["done"] = true;
         
         DynamicJsonDocument docSuccess(200);
         DeserializationError err = deserializeJson(docSuccess, responseBodyReader, DeserializationOption::Filter(successFilter));
@@ -290,6 +313,7 @@ delay(5000);
         if (err) {
             FUS_LOG("Failed to parse response JSON for success");
             FUS_LOG(err.c_str());
+            http.flush();
             return false;
         }
         
@@ -306,6 +330,7 @@ delay(5000);
             done = false;
         }
         FUS_LOG("Operation id " + id);
+        http.flush();
         return true;
     }
 
