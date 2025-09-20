@@ -1,9 +1,9 @@
 #pragma once
 #include <Arduino.h>
 // config
-#define FUSION_HOST "api-key.fusionbrain.ai"
+#define FUSION_HOST "llm.api.cloud.yandex.net"
 #define FUSION_PORT 443
-#define FUSION_PERIOD 6000
+#define FUSION_PERIOD 30000
 #define FUSION_TRIES 1
 #define FUS_LOG(x) Serial.println(x)
 // #define GHTTP_HEADERS_LOG Serial
@@ -22,6 +22,8 @@
 #include <WiFiClientSecure.h>
 #define FUSION_CLIENT WiFiClientSecure
 #endif
+
+
 class Kandinsky {
     typedef std::function<void(int x, int y, int w, int h, uint8_t* buf)> RenderCallback;
     typedef std::function<void()> RenderEndCallback;
@@ -41,6 +43,9 @@ class Kandinsky {
          successFilter["error"] = true;
 
          errorFilter["error"] = true;
+
+         // TODO Убрать заглушку
+        //  _uuid = "fbvph7vco5udtap3b6k71";
     }
 
     Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
@@ -81,6 +86,9 @@ class Kandinsky {
         //return request(State::GetStyles, "cdn.fusionbrain.ai", "/static/styles/web");
     }
     bool generate(Text query, uint16_t width = 512, uint16_t height = 512, Text style = "DEFAULT", Text negative = "") {
+        _uuid = "fbvs1mknakoq3j5sn1b9";
+        return true;
+
         status = "wrong config";
         if (!_api_id.length()) return false;
         if (!_folder_id.length()) return false;
@@ -104,8 +112,8 @@ class Kandinsky {
         generationOptions["mime_type"] = "image/jpeg";
         
         JsonObject aspectRatio = generationOptions.createNestedObject("aspectRatio");
-        aspectRatio["widthRatio"] = 1;
-        aspectRatio["heightRatio"] = 1;
+        aspectRatio["widthRatio"] = width;
+        aspectRatio["heightRatio"] = height;
         
 
 
@@ -119,7 +127,7 @@ class Kandinsky {
 
         uint8_t tries = FUSION_TRIES;
         while (tries--) {
-            if (performGenerateHttpRequest("llm.api.cloud.yandex.net", "/foundationModels/v1/imageGenerationAsync", "POST", jsonDoc, id, done, errorMsg)) {
+            if (performGenerateHttpRequest(FUSION_HOST, "/foundationModels/v1/imageGenerationAsync", "POST", jsonDoc, id, done, errorMsg)) {
                 FUS_LOG("Gen request sent");
                 _tmr = millis();
                 _uuid = id;
@@ -141,11 +149,13 @@ class Kandinsky {
         if (!_api_id.length()) return false;
         if (!_uuid.length()) return false;
         FUS_LOG("Check status...");
-        return false;
-        // String url("/key/api/v1/pipeline/status/");
-        // url += _uuid;
-        // return request(State::Status, FUSION_HOST, url);
+        
+        String errorMsg;
+        String url("/operations/");
+        url += _uuid;
+        return performGetImageRequest(FUSION_HOST, url, "GET", errorMsg);
     }
+
     void tick() {
         if (_uuid.length() && millis() - _tmr >= FUSION_PERIOD) {
             _tmr = millis();
@@ -292,11 +302,11 @@ class Kandinsky {
 
     // -----------------------------
 
-    bool performGetImageRequest(Text host, Text url, Text method = "GET") {
+    bool performGetImageRequest(Text host, Text url, Text method, String& errorMsg) {
         FUSION_CLIENT client;
-#ifdef ESP8266
-        client.setBufferSizes(512, 512);
-#endif
+// #ifdef ESP8266
+        // client.setBufferSizes(512, 512);
+// #endif
         client.setInsecure();
         ghttp::Client http(client, host.str(), FUSION_PORT);
         // Установка заголовков
@@ -305,28 +315,81 @@ class Kandinsky {
         headers.add("Authorization", "Api-Key " + _api_id);
         headers.add("Accept", "*/*");
 
+
+        FUS_LOG("Host " + host.toString());
+        FUS_LOG("Url " + url.toString());
+        // FUS_LOG("Body " + jsonString);
+        FUS_LOG("Headers");
+        FUS_LOG(headers);
+
+
         bool ok = http.request(url, method, headers);
 
         if (!ok) {
             FUS_LOG("Request error");
-            http.flush()
+            http.flush();
             return false;
         }
 
         ghttp::Client::Response resp = http.getResponse();
-        FUS_LOG("Response code: " + String(resp.code()));
 
-        if (resp && resp.code() >= 200 && resp.code() < 300) {
+        int httpStatus = resp.code();
+        FUS_LOG("Response code: " + String(httpStatus));
+
+        if (resp) {
+            FUS_LOG("Response");      
+        } else {
+            FUS_LOG("Response not exists");
+            http.flush();
+            return false;               
+        }
+        // int httpStatus = resp.code();
+        // FUS_LOG("Response code: " + String(httpStatus));
+
+        // httpStatus = 200;
+
+        // String plugStr = "{\"id\":\"fbva1kvaki5eho7ssp61\",";
+        // plugStr  +=  "\"description\":\"\",\"createdAt\":null,\"createdBy\":\"\",\"modifiedAt\":null,\"done\":true,\"metadata\":null,";
+        //   plugStr  += "\"response\":{\"@type\":\"type.googleapis.com/yandex.cloud.ai.foundation_models.v1.image_generation.ImageGenerationResponse\",";
+        //   plugStr  += "\"image\":\"MTIzNDU2Nzg5YXNkZmc=\",\"modelVersion\":\"\"}}";
+
+        
+        
+        // StreamReader bodyReader(bodyStreamPlug, bodyStreamPlug.len());
+
+
+
+        if (httpStatus < 200 || httpStatus > 299) {
+            FUS_LOG("Parsing error ...");
+            // Парсинг ответа с использованием статического фильтра для ошибки
+
+            StreamReader responseBodyReader(resp.body());
+            DynamicJsonDocument docError(100);
+            DeserializationError err = deserializeJson(docError, responseBodyReader, DeserializationOption::Filter(errorFilter));
+
+            if (err) {
+                FUS_LOG("Failed to parse response JSON for error");
+                FUS_LOG(err.c_str());
+                http.flush();
+                return false;
+            }
+            
+            // Извлечение поля "error"
+            if (docError.containsKey("error")) {
+                errorMsg = docError["error"].as<String>();
+            } else {
+                errorMsg = "Unknown error";
+            }
+            FUS_LOG(errorMsg.c_str());
+            http.flush();
+            return false;
+        } else {
+                FUS_LOG("Parsing success document ...");
                 bool ok = parseStatus(resp.body());
                 http.flush();
                 return ok;
-            
-        } else {
-            // TODO Добавить парсинг ошибки
-            http.flush();
-            FUS_LOG("Error" + String(resp.code()));
-            FUS_LOG("Response error");
         }
+
         return false;
     }
 
@@ -343,13 +406,13 @@ class Kandinsky {
                 break;
             } else if ( c == '"') {
                result = stream.readStringUntil('"');
-               break
+               break;
             } else if ( c == ',' || c == '}') {
                 break;
             }
                 // Это какое-то неожиданное число
                 // Просто пропустим
-            }
+            
         }
 
         return result;
@@ -374,6 +437,11 @@ class Kandinsky {
             stream.readStringUntil(':');
             // Теперь читаем значение
             String val = readValue(stream);
+
+            FUS_LOG("---");
+            FUS_LOG("Key " + key);
+            FUS_LOG("Val " + val);
+            FUS_LOG("---");
 
             if (!key.length() || !val.length()) break;
 
