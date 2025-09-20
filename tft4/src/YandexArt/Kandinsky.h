@@ -399,7 +399,9 @@ class Kandinsky {
         
         int nextChar = stream.peek();
 
-        while ((c = stream.read()) != -1) { // Читаем символы из потока
+        while ((c = stream.read()) != -1) {
+            FUS_LOG("Char " +  String((char)c));
+             // Читаем символы из потока
             if (c == 'n' || c == 't' || c == 'f') {
                 // Это null или true или false
                 result = String((char)c) + stream.readStringUntil(',');
@@ -422,47 +424,57 @@ class Kandinsky {
         bool found = false;
         bool insideResult = false;
         while (stream.available()) {
+            FUS_LOG("Find start key");
             stream.readStringUntil('"');
+            FUS_LOG("Start key");
             String key = stream.readStringUntil('"');
             if (key == "response") {
                 insideResult = true;
                 continue;
             }
             if (insideResult && key == "image") {
+                FUS_LOG("image found");
                 found = true;
                 break;
             }
 
             // Только что прочли ключ, значит едем до двоеточия
             stream.readStringUntil(':');
+            FUS_LOG("---");
+            FUS_LOG("Key " + key);            
             // Теперь читаем значение
             String val = readValue(stream);
 
-            FUS_LOG("---");
-            FUS_LOG("Key " + key);
             FUS_LOG("Val " + val);
             FUS_LOG("---");
 
-            if (!key.length() || !val.length()) break;
+            if (!key.length() ) {
+                FUS_LOG("Key not found");
+                break;
+            }
 
             // TODO 
-            if (key == "status") {
+            if (key == "done") {
                 switch (Text(val).hash()) {
-                    case SH("INITIAL"):
-                    case SH("PROCESSING"):
-                        return true;
-                    case SH("DONE"):
-                        _uuid = "";
+                    case SH("true"):
+                        FUS_LOG("Done is true");
+                        // В ответе должен быть image
+                        // TODO Убрать заглушку
+                        // _uuid = "";
                         break;
-                    case SH("FAIL"):
-                        _uuid = "";
-                        status = "gen fail";
-                        return false;
+                    case SH("false"):
+                        FUS_LOG("Done is false");
+                        return true;
+                        break;
+                    default:
+                        FUS_LOG("Done is unknown");
+                        return true;
                 }
             }
         }
 
-
+FUS_LOG("Exit from loop");
+        return false;
         if (found) {
             stream.readStringUntil('"');
             uint8_t* workspace = new uint8_t[TJPGD_WORKSPACE_SIZE];
