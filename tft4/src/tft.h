@@ -44,7 +44,7 @@ void tft_render(int x, int y, int w, int h, uint8_t* buf) {
 void tft_init() {
     SPI.setFrequency(4000000ul);
     tft.begin();
-    tft.setRotation(0);
+    tft.setRotation(2);
     tft.fillScreen(0x0000);
     tft.setTextColor(0x07E0);
     tft.setTextSize(2, 2);

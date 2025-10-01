@@ -23,6 +23,8 @@
 #define FUSION_CLIENT WiFiClientSecure
 #endif
 
+#define	FINAL_BUF_SIZE		512
+
 // Константы, определяющие внутреннюю область
 const int INTERNAL_X = 48;
 const int INTERNAL_Y = 80;
@@ -32,6 +34,13 @@ const int INTERNAL_HEIGHT = 480;
 // Вспомогательные макросы для вычисления минимума/максимума
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+// Макросы для извлечения и установки компонентов RGB565
+#define GET_R(color) (((color) >> 11) & 0x1F)
+#define GET_G(color) (((color) >> 5) & 0x3F)
+#define GET_B(color) ((color) & 0x1F)
+
+#define SET_RGB(r, g, b) ((((r) & 0x1F) << 11) | (((g) & 0x3F) << 5) | ((b) & 0x1F))
 
 
 class Kandinsky {
@@ -53,9 +62,6 @@ class Kandinsky {
          successFilter["error"] = true;
 
          errorFilter["error"] = true;
-
-         // TODO Убрать заглушку
-        //  _uuid = "fbvph7vco5udtap3b6k71";
     }
 
     Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
@@ -96,20 +102,18 @@ class Kandinsky {
         //return request(State::GetStyles, "cdn.fusionbrain.ai", "/static/styles/web");
     }
     bool generate(Text query, uint16_t width = 512, uint16_t height = 512, Text style = "DEFAULT", Text negative = "") {
-        _uuid = "fbv2ad972upgdk5qnu88";
-        return true;
+        // _uuid = "fbv2ad972upgdk5qnu88";
+        // return true;
 
         status = "wrong config";
         if (!_api_id.length()) return false;
         if (!_folder_id.length()) return false;
         if (!query.length()) return false;
-        //if (!_id.length()) return false;
-        
 
         // Создание JSON-документа для тела запроса
         DynamicJsonDocument jsonDoc(256);
         jsonDoc["model_uri"] = "art://" + _folder_id + "/yandex-art/latest";
-        // jsonDoc["model_uri"] = "art://b2g/yandex-art/latest";
+
         
         // // Создание массива messages
         JsonArray messages = jsonDoc.createNestedArray("messages");
@@ -124,9 +128,6 @@ class Kandinsky {
         JsonObject aspectRatio = generationOptions.createNestedObject("aspectRatio");
         aspectRatio["widthRatio"] = width;
         aspectRatio["heightRatio"] = height;
-        
-
-
 
         // FUS_LOG("JSON being sent:");
         // FUS_LOG(json);
@@ -185,7 +186,7 @@ class Kandinsky {
     RenderCallback _rnd_cb = nullptr;
     RenderEndCallback _end_cb = nullptr;
     StreamB64* _stream = nullptr;
-    uint8_t _finalBuffer[512];
+    uint8_t _finalBuffer[FINAL_BUF_SIZE];
 
     // static
     static Kandinsky* self;
@@ -201,19 +202,6 @@ class Kandinsky {
         return len;
     }
    
-    static int jd_output_cb1(JDEC* jdec, void* bitmap, JRECT* rect) {
-        if (self && self->_rnd_cb) {
-            // FUS_LOG("Rectangle");
-            // FUS_LOG(rect->left);
-            // FUS_LOG(rect->top);
-            // FUS_LOG(rect->right - rect->left + 1);
-            // FUS_LOG(rect->bottom - rect->top + 1);
-
-            self->_rnd_cb(rect->left, rect->top, rect->right - rect->left + 1, rect->bottom - rect->top + 1, (uint8_t*)bitmap);
-        }
-        return 1;
-    }
-
     static int jd_output_cb(JDEC* jdec, void* bitmap, JRECT* rect) {
         if (self && self->_rnd_cb) {
             filter_points(rect->left, rect->top, rect->right - rect->left + 1, rect->bottom - rect->top + 1, (uint8_t*)bitmap);
@@ -222,7 +210,7 @@ class Kandinsky {
         return 1;
     }
 
-// Функция для фильтрации точек
+
     static void filter_points(int x, int y, int width, int height, uint8_t* src_buf) {
         // Вычисляем параметры пересечения прямоугольников
         int intersect_x = MAX(x, INTERNAL_X);
@@ -233,32 +221,13 @@ class Kandinsky {
         int new_width = intersect_x_end - intersect_x;
         int new_height = intersect_y_end - intersect_y;
         
-        // Проверка на полное вхождение
-        bool fully_contained = (x >= INTERNAL_X) && (y >= INTERNAL_Y) &&
-                                ((x + width) <= (INTERNAL_X + INTERNAL_WIDTH)) &&
-                                ((y + height) <= (INTERNAL_Y + INTERNAL_HEIGHT));
+        // Проверка на полное вхождение не требуется, так как мы всегда копируем данные и инвертируем цвета
         
-        if (fully_contained) {
-            // Если входящая область полностью входит в внутреннюю, передаем исходный буфер
-            self->_rnd_cb(x - INTERNAL_X, y - INTERNAL_Y, width, height, src_buf);
-            return;
-        }
-        
-        // Если входящая область не полностью входит, проверяем, есть ли пересечение
         if (new_width <= 0 || new_height <= 0) {
-            // Если пересечение пустое, очищаем filtered_buf
             return;
         }
         
-        // // Рассчитываем размер выходного буфера
-        // int buffer_size = new_width * new_height * 2; // 2 байта на точку
-        // // Перевыделяем память для filtered_buf, если необходимо
-        // if (filtered_buf != nullptr) {
-        //     delete[] filtered_buf;
-        // }
-        // filtered_buf = new uint8_t[buffer_size];
-        
-        // Копируем подходящие точки
+        // Копируем подходящие точки и инвертируем цвета
         for (int dy = 0; dy < new_height; dy++) {
             for (int dx = 0; dx < new_width; dx++) {
                 // Вычисляем координаты в исходном буфере
@@ -269,15 +238,24 @@ class Kandinsky {
                 int src_index = (src_y * width + src_x) * 2;
                 int dst_index = (dy * new_width + dx) * 2;
                 
-                // Копирование данных
-                self->_finalBuffer[dst_index]     = src_buf[src_index];
-                self->_finalBuffer[dst_index + 1] = src_buf[src_index + 1];
+                // Извлекаем цвет из исходного буфера
+                uint16_t color = (src_buf[src_index] << 8) | src_buf[src_index + 1];
+                
+                // Инвертируем цвет
+                int r = 31 - GET_R(color);
+                int g = 63 - GET_G(color);
+                int b = 31 - GET_B(color);
+                uint16_t inverted_color = SET_RGB(r, g, b);
+                
+                // Записываем инвертированный цвет в выходной буфер
+                self->_finalBuffer[dst_index] = inverted_color >> 8;
+                self->_finalBuffer[dst_index + 1] = inverted_color & 0xFF;
             }
         }
         
         // Вызов целевой функции с новыми параметрами
         self->_rnd_cb(intersect_x - INTERNAL_X, intersect_y - INTERNAL_Y, new_width, new_height, self->_finalBuffer);
-    }
+    }    
 
     // system
     bool performGenerateHttpRequest(Text host, Text url, Text method, DynamicJsonDocument& jsonDoc, String& id, bool& done, String& errorMsg) {
@@ -299,8 +277,7 @@ class Kandinsky {
         ghttp::Client http(client, host.str(), FUSION_PORT);
 
 
-        // Отправка запроса с JSON в теле
-        // String body = "{\"model_uri\":\"art://b1g/yandex-art/latest\"}";
+        // Отправка запроса
 
         bool ok = http.request(url, method, headers, jsonString);
         
@@ -320,7 +297,7 @@ class Kandinsky {
         ghttp::Client::Response resp = http.getResponse();
         
         if (resp) {
-            FUS_LOG("Response");      
+            FUS_LOG("Response received");      
         } else {
             FUS_LOG("Response not exists");
             http.flush();
@@ -384,9 +361,6 @@ class Kandinsky {
         return true;
     }
 
-
-    // -----------------------------
-
     bool performGetImageRequest(Text host, Text url, Text method, String& errorMsg) {
         FUSION_CLIENT client;
 // #ifdef ESP8266
@@ -428,21 +402,6 @@ class Kandinsky {
             http.flush();
             return false;               
         }
-        // int httpStatus = resp.code();
-        // FUS_LOG("Response code: " + String(httpStatus));
-
-        // httpStatus = 200;
-
-        // String plugStr = "{\"id\":\"fbva1kvaki5eho7ssp61\",";
-        // plugStr  +=  "\"description\":\"\",\"createdAt\":null,\"createdBy\":\"\",\"modifiedAt\":null,\"done\":true,\"metadata\":null,";
-        //   plugStr  += "\"response\":{\"@type\":\"type.googleapis.com/yandex.cloud.ai.foundation_models.v1.image_generation.ImageGenerationResponse\",";
-        //   plugStr  += "\"image\":\"MTIzNDU2Nzg5YXNkZmc=\",\"modelVersion\":\"\"}}";
-
-        
-        
-        // StreamReader bodyReader(bodyStreamPlug, bodyStreamPlug.len());
-
-
 
         if (httpStatus < 200 || httpStatus > 299) {
             FUS_LOG("Parsing error ...");
@@ -485,7 +444,6 @@ class Kandinsky {
         int nextChar = stream.peek();
 
         while ((c = stream.read()) != -1) {
-            FUS_LOG("Char " +  String((char)c));
              // Читаем символы из потока
             if (c == 'n' || c == 't' || c == 'f') {
                 // Это null или true или false
@@ -509,9 +467,7 @@ class Kandinsky {
         bool found = false;
         bool insideResult = false;
         while (stream.available()) {
-            FUS_LOG("Find start key");
             stream.readStringUntil('"');
-            FUS_LOG("Start key");
             String key = stream.readStringUntil('"');
             if (key == "response") {
                 insideResult = true;
@@ -525,13 +481,11 @@ class Kandinsky {
 
             // Только что прочли ключ, значит едем до двоеточия
             stream.readStringUntil(':');
-            FUS_LOG("---");
             FUS_LOG("Key " + key);            
+
             // Теперь читаем значение
             String val = readValue(stream);
-
             FUS_LOG("Val " + val);
-            FUS_LOG("---");
 
             if (!key.length() ) {
                 FUS_LOG("Key not found");
@@ -557,10 +511,6 @@ class Kandinsky {
             }
         }
 
-// TODO Убрать заглушку
-// FUS_LOG("Exit from loop");
-//         return false;
-        
         if (found) {
             stream.readStringUntil('"');
             uint8_t* workspace = new uint8_t[TJPGD_WORKSPACE_SIZE];
@@ -588,36 +538,6 @@ class Kandinsky {
         }
         return true;
     }
-
-
-
-    bool parse(State state, gson::Parser& json) {
-        // Удалить
-        switch (state) {
-            case State::GetStyles:
-                styles = "";
-                for (int i = 0; i < (int)json.rootLength(); i++) {
-                    if (i) styles += ';';
-                    json[i]["name"].addString(styles);
-                }
-                return styles.length();
-            case State::GetModels:
-                json[0]["id"].toString(_id);
-                if (_id.length()) return true;
-                break;
-            case State::Generate:
-                _tmr = millis();
-                json["uuid"].toString(_uuid);
-                if (_uuid.length()) return true;
-                break;
-            default:
-                break;
-        }
-        return false;
-    }
 };
-
-
-
 
 Kandinsky* Kandinsky::self __attribute__((weak)) = nullptr;
