@@ -24,10 +24,14 @@
 #endif
 
 // Константы, определяющие внутреннюю область
-const int INNER_X = 48;
-const int INNER_Y = 80;
-const int INNER_WIDTH = 320;
-const int INNER_HEIGHT = 480;
+const int INTERNAL_X = 48;
+const int INTERNAL_Y = 80;
+const int INTERNAL_WIDTH = 320;
+const int INTERNAL_HEIGHT = 480;
+
+// Вспомогательные макросы для вычисления минимума/максимума
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
 class Kandinsky {
@@ -181,7 +185,7 @@ class Kandinsky {
     RenderCallback _rnd_cb = nullptr;
     RenderEndCallback _end_cb = nullptr;
     StreamB64* _stream = nullptr;
-    uint8_t _finalBuffer[INNER_WIDTH * INNER_HEIGHT * 2];
+    uint8_t _finalBuffer[512];
 
     // static
     static Kandinsky* self;
@@ -212,65 +216,67 @@ class Kandinsky {
 
     static int jd_output_cb(JDEC* jdec, void* bitmap, JRECT* rect) {
         if (self && self->_rnd_cb) {
-            process(rect->left, rect->top, rect->right - rect->left + 1, rect->bottom - rect->top + 1, (uint8_t*)bitmap)ж
+            filter_points(rect->left, rect->top, rect->right - rect->left + 1, rect->bottom - rect->top + 1, (uint8_t*)bitmap);
             // self->_rnd_cb(rect->left, rect->top, rect->right - rect->left + 1, rect->bottom - rect->top + 1, (uint8_t*)bitmap);
         }
         return 1;
     }
 
-    static void process(int x, int y, int w, int h, uint8_t* buf) {
-        // Проверяем, что экземпляр класса был создан
-        if (self == nullptr) {
-            Serial.println("Error: ImageProcessor instance not initialized.");
+// Функция для фильтрации точек
+    static void filter_points(int x, int y, int width, int height, uint8_t* src_buf) {
+        // Вычисляем параметры пересечения прямоугольников
+        int intersect_x = MAX(x, INTERNAL_X);
+        int intersect_y = MAX(y, INTERNAL_Y);
+        int intersect_x_end = MIN(x + width, INTERNAL_X + INTERNAL_WIDTH);
+        int intersect_y_end = MIN(y + height, INTERNAL_Y + INTERNAL_HEIGHT);
+        
+        int new_width = intersect_x_end - intersect_x;
+        int new_height = intersect_y_end - intersect_y;
+        
+        // Проверка на полное вхождение
+        bool fully_contained = (x >= INTERNAL_X) && (y >= INTERNAL_Y) &&
+                                ((x + width) <= (INTERNAL_X + INTERNAL_WIDTH)) &&
+                                ((y + height) <= (INTERNAL_Y + INTERNAL_HEIGHT));
+        
+        if (fully_contained) {
+            // Если входящая область полностью входит в внутреннюю, передаем исходный буфер
+            self->_rnd_cb(x - INTERNAL_X, y - INTERNAL_Y, width, height, src_buf);
             return;
         }
-
-        bool hasPointInFinal = false;
-
-        // Проверяем, полностью ли входит исходный прямоугольник в итоговую область
-        if (x >= INNER_X && y >= INNER_Y &&
-            (x + w) <= (INNER_X + INNER_WIDTH) &&
-            (y + h) <= (INNER_Y + INNER_HEIGHT)) {
-            
-            // Если входит, просто используем исходный буфер и корректируем координаты
-            int newX = x - INNER_X;
-            int newY = y - INNER_Y;
-            self->finalize(newX, newY, w, h, buf);
-        } else {
-            // Если не входит, перекладываем только те точки, которые попадают в итоговую область
-            for (int row = 0; row < h; row++) {
-                for (int col = 0; col < w; col++) {
-                    int currentX = x + col;
-                    int currentY = y + row;
-                    
-                    // Проверяем, попадает ли текущая точка в итоговую область
-                    if (currentX >= INNER_X && currentX < (INNER_X + INNER_WIDTH) &&
-                        currentY >= INNER_Y && currentY < (INNER_Y + INNER_HEIGHT)) {
-                        
-                        hasPointInFinal = true;
-
-                        // Вычисляем индекс точки в исходном буфере
-                        int sourceIndex = (row * w + col) * 2;
-                        
-                        // Вычисляем новые координаты относительно начала внутренней области
-                        int newX = currentX - INNER_X;
-                        int newY = currentY - INNER_Y;
-                        
-                        // Вычисляем индекс точки в итоговом буфере
-                        int destIndex = ((newY * INNER_WIDTH) + newX) * 2;
-                        
-                        // Копируем данные в итоговый буфер
-                        self->_finalBuffer[destIndex] = buf[sourceIndex];
-                        self->_finalBuffer[destIndex + 1] = buf[sourceIndex + 1];
-                    }
-                }
-            }
-            
-            // Если хотя бы одна точка попадает в итоговую область, вызываем finalize
-            if (hasPointInFinal) {
-                self->finalize(INNER_X, INNER_Y, INNER_WIDTH, INNER_HEIGHT, self->_finalBuffer);
+        
+        // Если входящая область не полностью входит, проверяем, есть ли пересечение
+        if (new_width <= 0 || new_height <= 0) {
+            // Если пересечение пустое, очищаем filtered_buf
+            return;
+        }
+        
+        // // Рассчитываем размер выходного буфера
+        // int buffer_size = new_width * new_height * 2; // 2 байта на точку
+        // // Перевыделяем память для filtered_buf, если необходимо
+        // if (filtered_buf != nullptr) {
+        //     delete[] filtered_buf;
+        // }
+        // filtered_buf = new uint8_t[buffer_size];
+        
+        // Копируем подходящие точки
+        for (int dy = 0; dy < new_height; dy++) {
+            for (int dx = 0; dx < new_width; dx++) {
+                // Вычисляем координаты в исходном буфере
+                int src_x = intersect_x - x + dx;
+                int src_y = intersect_y - y + dy;
+                
+                // Индексы в памяти (по 2 байта на точку)
+                int src_index = (src_y * width + src_x) * 2;
+                int dst_index = (dy * new_width + dx) * 2;
+                
+                // Копирование данных
+                self->_finalBuffer[dst_index]     = src_buf[src_index];
+                self->_finalBuffer[dst_index + 1] = src_buf[src_index + 1];
             }
         }
+        
+        // Вызов целевой функции с новыми параметрами
+        self->_rnd_cb(intersect_x - INTERNAL_X, intersect_y - INTERNAL_Y, new_width, new_height, self->_finalBuffer);
     }
 
     // system
