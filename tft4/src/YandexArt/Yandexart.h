@@ -23,7 +23,8 @@
 #define FUSION_CLIENT WiFiClientSecure
 #endif
 
-#define	FINAL_BUF_SIZE		512
+#define	FINAL_BUF_SIZE		128
+#define	JDOC_START_SIZE		140
 
 // Константы, определяющие внутреннюю область
 const int INTERNAL_X = 48;
@@ -43,7 +44,7 @@ const int INTERNAL_HEIGHT = 480;
 #define SET_RGB(r, g, b) ((((r) & 0x1F) << 11) | (((g) & 0x3F) << 5) | ((b) & 0x1F))
 
 
-class Kandinsky {
+class YandexArt {
     typedef std::function<void(int x, int y, int w, int h, uint8_t* buf)> RenderCallback;
     typedef std::function<void()> RenderEndCallback;
     enum class State : uint8_t {
@@ -55,7 +56,7 @@ class Kandinsky {
    public:
 
 
-    Kandinsky() {
+    YandexArt() {
         // Определение статических фильтров
          successFilter["id"] = true;
          successFilter["done"] = true;
@@ -64,7 +65,7 @@ class Kandinsky {
          errorFilter["error"] = true;
     }
 
-    Kandinsky(const String& api_id, const String& folder_id) : Kandinsky()  {
+    YandexArt(const String& api_id, const String& folder_id) : YandexArt()  {
         setKey(api_id, folder_id);
     }
 
@@ -111,7 +112,7 @@ class Kandinsky {
         if (!query.length()) return false;
 
         // Создание JSON-документа для тела запроса
-        DynamicJsonDocument jsonDoc(256);
+        DynamicJsonDocument jsonDoc(JDOC_START_SIZE + (query.length() * 2));
         jsonDoc["model_uri"] = "art://" + _folder_id + "/yandex-art/latest";
 
         
@@ -120,7 +121,14 @@ class Kandinsky {
         JsonObject message1 = messages.createNestedObject();
         message1["text"] = query;
         message1["weight"] = 1;
-        
+
+        // if (negative.length() > 0) {
+            
+        //     JsonObject message2 = messages.createNestedObject();
+        //     message2["text"] = "Исключить " + negative.c_str();
+        //     message2["weight"] = 2;
+        // }
+
         // Создание объекта generation_options
         JsonObject generationOptions = jsonDoc.createNestedObject("generation_options");
         generationOptions["mime_type"] = "image/jpeg";
@@ -189,7 +197,7 @@ class Kandinsky {
     uint8_t _finalBuffer[FINAL_BUF_SIZE];
 
     // static
-    static Kandinsky* self;
+    static YandexArt* self;
 
     // Фильтры для успешного ответа и ошибки
     StaticJsonDocument<200> successFilter;
@@ -540,4 +548,4 @@ class Kandinsky {
     }
 };
 
-Kandinsky* Kandinsky::self __attribute__((weak)) = nullptr;
+YandexArt* YandexArt::self __attribute__((weak)) = nullptr;

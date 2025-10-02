@@ -14,20 +14,16 @@ void setup() {
     sett_init();
     tft_init();
 
-
-    tft.print("TEST !!!");
-    tft.println();
-
     // ======= AI =======
     gen.setKey(db[kk::ya_api_id], db[kk::ya_folder_id]);
 
     // ======= AP =======
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP("Kandinsky AP");
+    WiFi.softAP("Yandex Art AP");
     
     tft.print("AiFrame v");
     tft.println(F_VERSION);
-    tft.println("Kandinsky AP");
+    tft.println("Yandex Art AP");
     tft.print("IP: ");
     tft.println(WiFi.softAPIP());
     tft.println();
@@ -58,31 +54,31 @@ void setup() {
 
     if (!wifi_ok) return;
 
-    // ======= STYLES =======
-    tft.println("Gettings styles...");
-    if (gen.getStyles()) {
-        tft.print("OK. Styles: ");
-        tft.println(gen.styles);
-    } else {
-        tft.print("Error! ");
-        tft.println(gen.styles);
-    }
-    tft.println();
+    // // ======= STYLES =======
+    // tft.println("Gettings styles...");
+    // if (gen.getStyles()) {
+    //     tft.print("OK. Styles: ");
+    //     tft.println(gen.styles);
+    // } else {
+    //     tft.print("Error! ");
+    //     tft.println(gen.styles);
+    // }
+    // tft.println();
 
-    // ======= MODEL =======
-    tft.println("Init AI model...");
-    if (gen.begin()) {
-        tft.print("OK. Model: ");
-        tft.println(gen.modelID());
-    } else {
-        tft.println("Error!");
-    }
+    // // ======= MODEL =======
+    // tft.println("Init AI model...");
+    // if (gen.begin()) {
+    //     tft.print("OK. Model: ");
+    //     tft.println(gen.modelID());
+    // } else {
+    //     tft.println("Error!");
+    // }
     tft.println();
 
     tft.println("Ready!");
     Serial.println("Ready!");
 
-    if (WiFi.status() == WL_CONNECTED) ota.checkUpdate();
+    // if (WiFi.status() == WL_CONNECTED) ota.checkUpdate();
 }
 
 void loop() {

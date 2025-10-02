@@ -1,8 +1,8 @@
 #pragma once
-#include "YandexArt/Kandinsky.h"
+#include "YandexArt/Yandexart.h"
 
 #include "config.h"
-Kandinsky gen;
+YandexArt gen;
 bool gen_flag = 0;
 
 void generate() {

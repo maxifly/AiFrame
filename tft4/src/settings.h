@@ -9,7 +9,7 @@
 SettingsGyver sett("AI Фоторамка v" F_VERSION, &db);
 sets::Timer gentmr;
 
-AutoOTA ota(F_VERSION, "AlexGyver/AiFrame/main/project.json");
+// AutoOTA ota(F_VERSION, "AlexGyver/AiFrame/main/project.json");
 
 void init_tmr() {
     int prd = db[kk::auto_prd];
@@ -21,9 +21,9 @@ void init_tmr() {
 void build(sets::Builder& b) {
     {
         sets::Group g(b, "Генерация");
-        b.Select(kk::gen_style, "Стиль", gen.styles);
+        // b.Select(kk::gen_style, "Стиль", gen.styles);
         b.Input(kk::gen_query, "Промт");
-        b.Input(kk::gen_negative, "Исключить");
+        // b.Input(kk::gen_negative, "Исключить");
         b.Label(SH("status"), "Статус", gen.status);
         b.Button(SH("generate"), "Генерировать");
     }
@@ -50,7 +50,7 @@ void build(sets::Builder& b) {
         }
     }
 
-    if (b.Confirm("update"_h)) ota.update();
+    // if (b.Confirm("update"_h)) ota.update();
 
     // actions
     if (b.build.isAction()) {
@@ -77,7 +77,7 @@ void build(sets::Builder& b) {
 
 void update(sets::Updater& u) {
     u.update(SH("status"), gen.status);
-    if (ota.hasUpdate()) u.update("update"_h, "Доступно обновление. Обновить прошивку?");
+    // if (ota.hasUpdate()) u.update("update"_h, "Доступно обновление. Обновить прошивку?");
 }
 
 void sett_init() {
@@ -88,7 +88,7 @@ void sett_init() {
 }
 
 void sett_tick() {
-    ota.tick();
+    // ota.tick();
     sett.tick();
     if (gentmr) generate();
 }
